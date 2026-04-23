@@ -13,6 +13,7 @@ import { fetchConsensusEstimates } from "./utils/fetch-consensus-estimates.js";
 import { generateAnalysis } from "./utils/generate-analysis.js";
 import { buildHtmlCard, buildTextContent } from "./utils/html-template.js";
 import { renderHtmlToImage } from "./utils/render-html.js";
+import { getOutputDir } from "./utils/paths.js";
 import type { AnalysisData } from "./utils/html-template.js";
 import type { ConsensusData } from "./utils/fetch-consensus-estimates.js";
 
@@ -133,12 +134,12 @@ export async function processAnalysis(input: ProcessInput): Promise<ProcessOutpu
 
   // ── Step 8: Persist outputs ────────────────────────────────────────
   const date = new Date().toISOString().slice(0, 10);
-  const outDir = join("output", date);
+  const outDir = getOutputDir(date);
   await mkdir(outDir, { recursive: true });
   const slug = safeSlug(input.ticker);
   const pngPath = join(outDir, `${slug}_redflag_${date}.png`);
   const txtPath = join(outDir, `${slug}_redflag_${date}.txt`);
-  const htmlPath = join(outDir, `${slug}_redflag_card.html`);
+  const htmlPath = join(outDir, `${slug}_redflag_${date}.html`);
 
   await writeFile(pngPath, pngBuffer);
   await writeFile(txtPath, textContent, "utf8");

@@ -1,12 +1,8 @@
 # Environment and secrets
 .env
 
-# Temporary processing files
-.tmp/
-
 # Node.js
 node_modules/
-dist/
 *.tsbuildinfo
 
 # IDE

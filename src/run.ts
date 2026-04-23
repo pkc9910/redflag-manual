@@ -14,11 +14,15 @@
  *   2. Filter for earnings/guidance keywords within the last 25h.
  *   3. For each match: resolve the CPH ticker, then run processAnalysis()
  *      end-to-end (stock data → consensus → release fetch → LLM → PNG/TXT/HTML).
- *   4. Print a summary of successes and failures.
+ *   4. Write output/YYYY-MM-DD/_run.md with the full run tally — always, even
+ *      on zero matches or errors, so silent failures are impossible.
  */
 
 import "dotenv/config";
+import { writeFile, mkdir } from "node:fs/promises";
+import { join } from "node:path";
 import { processAnalysis } from "./process-analysis.js";
+import { getOutputDir } from "./utils/paths.js";
 
 const EARNINGS_KEYWORDS = [
   "årsrapport",
@@ -51,6 +55,25 @@ interface NasdaqNewsItem {
   messageUrl: string;
   company: string;
   published: string;
+}
+
+interface Success {
+  ticker: string;
+  company: string;
+  reportPeriod: string;
+  pngPath: string;
+}
+
+interface Failure {
+  company: string;
+  ticker?: string;
+  reason: string;
+}
+
+interface Skipped {
+  headline: string;
+  company: string;
+  reason: string;
 }
 
 async function lookupTicker(companyName: string): Promise<string | null> {
@@ -91,82 +114,197 @@ function guessReportPeriod(headline: string): string {
   return `Regnskab ${year}`;
 }
 
-async function main() {
-  console.log("Scanning Nasdaq Copenhagen for new earnings releases...");
+interface RunSummary {
+  status: "OK" | "FAILED";
+  startedAt: string;
+  finishedAt: string;
+  itemsFetched: number;
+  earningsMatches: number;
+  successes: Success[];
+  failures: Failure[];
+  skipped: Skipped[];
+  error?: string;
+}
 
-  const response = await fetch(NASDAQ_NEWS_API);
-  if (!response.ok) {
-    throw new Error(`Nasdaq news API returned ${response.status}`);
+async function writeRunSummary(date: string, summary: RunSummary): Promise<void> {
+  const outDir = getOutputDir(date);
+  await mkdir(outDir, { recursive: true });
+  const path = join(outDir, "_run.md");
+
+  const lines: string[] = [];
+  lines.push(`# redflag run ${summary.startedAt}`);
+  lines.push("");
+  lines.push(`- Status: ${summary.status}`);
+  lines.push(`- Started: ${summary.startedAt}`);
+  lines.push(`- Finished: ${summary.finishedAt}`);
+  lines.push(`- News items fetched: ${summary.itemsFetched}`);
+  lines.push(`- Earnings matches (≤25h, keywords): ${summary.earningsMatches}`);
+  lines.push(`- Successful tickers: ${summary.successes.length}`);
+  lines.push(`- Failed tickers: ${summary.failures.length}`);
+  lines.push("");
+  lines.push("## Successes");
+  if (summary.successes.length === 0) {
+    lines.push("(none)");
+  } else {
+    for (const s of summary.successes) {
+      lines.push(`- ${s.ticker} — ${s.company} (${s.reportPeriod}) → ${s.pngPath}`);
+    }
   }
+  lines.push("");
+  lines.push("## Failures");
+  if (summary.failures.length === 0) {
+    lines.push("(none)");
+  } else {
+    for (const f of summary.failures) {
+      const t = f.ticker ? ` (${f.ticker})` : "";
+      lines.push(`- ${f.company}${t}: ${f.reason}`);
+    }
+  }
+  lines.push("");
+  lines.push("## Scanned but skipped");
+  if (summary.skipped.length === 0) {
+    lines.push("(none)");
+  } else {
+    for (const s of summary.skipped) {
+      lines.push(`- "${s.headline}" — ${s.company}: ${s.reason}`);
+    }
+  }
+  if (summary.error) {
+    lines.push("");
+    lines.push("## Error");
+    lines.push("```");
+    lines.push(summary.error);
+    lines.push("```");
+  }
+  lines.push("");
 
-  const data = (await response.json()) as {
-    results?: {
-      item?: Array<{
-        headline?: string;
-        messageUrl?: string;
-        company?: string;
-        published?: string;
-      }>;
-    };
+  await writeFile(path, lines.join("\n"), "utf8");
+  console.log(`Wrote ${path}`);
+}
+
+async function main() {
+  const date = new Date().toISOString().slice(0, 10);
+  const startedAt = new Date().toISOString();
+
+  const summary: RunSummary = {
+    status: "OK",
+    startedAt,
+    finishedAt: startedAt,
+    itemsFetched: 0,
+    earningsMatches: 0,
+    successes: [],
+    failures: [],
+    skipped: [],
   };
 
-  const items: NasdaqNewsItem[] = (data.results?.item ?? [])
-    .filter((i) => i.headline && i.messageUrl && i.company)
-    .map((i) => ({
-      headline: i.headline!,
-      messageUrl: i.messageUrl!,
-      company: i.company!,
-      published: i.published ?? "",
-    }));
+  try {
+    console.log("Scanning Nasdaq Copenhagen for new earnings releases...");
 
-  console.log(`Fetched ${items.length} news items from Nasdaq Copenhagen`);
-
-  const cutoff = new Date(Date.now() - 25 * 60 * 60 * 1000);
-  const earningsItems = items.filter((item) => {
-    if (item.published && new Date(item.published) < cutoff) return false;
-    const lower = item.headline.toLowerCase();
-    return EARNINGS_KEYWORDS.some((kw) => lower.includes(kw));
-  });
-
-  console.log(`Found ${earningsItems.length} earnings-related releases\n`);
-
-  const successes: string[] = [];
-  const failures: Array<{ company: string; reason: string }> = [];
-
-  for (const item of earningsItems) {
-    const ticker = await lookupTicker(item.company);
-    if (!ticker) {
-      console.log(
-        `Skipping "${item.headline}" — no CPH ticker for "${item.company}"`
-      );
-      failures.push({ company: item.company, reason: "no CPH ticker" });
-      continue;
+    const response = await fetch(NASDAQ_NEWS_API);
+    if (!response.ok) {
+      throw new Error(`Nasdaq news API returned ${response.status}`);
     }
 
-    const reportPeriod = guessReportPeriod(item.headline);
-    console.log(`\n── ${item.company} (${ticker}) — ${reportPeriod} ──`);
+    const data = (await response.json()) as {
+      results?: {
+        item?: Array<{
+          headline?: string;
+          messageUrl?: string;
+          company?: string;
+          published?: string;
+        }>;
+      };
+    };
 
+    const items: NasdaqNewsItem[] = (data.results?.item ?? [])
+      .filter((i) => i.headline && i.messageUrl && i.company)
+      .map((i) => ({
+        headline: i.headline!,
+        messageUrl: i.messageUrl!,
+        company: i.company!,
+        published: i.published ?? "",
+      }));
+
+    summary.itemsFetched = items.length;
+    console.log(`Fetched ${items.length} news items from Nasdaq Copenhagen`);
+
+    const cutoff = new Date(Date.now() - 25 * 60 * 60 * 1000);
+    const earningsItems: NasdaqNewsItem[] = [];
+    for (const item of items) {
+      if (item.published && new Date(item.published) < cutoff) {
+        summary.skipped.push({
+          headline: item.headline,
+          company: item.company,
+          reason: "outside 25h lookback",
+        });
+        continue;
+      }
+      const lower = item.headline.toLowerCase();
+      if (!EARNINGS_KEYWORDS.some((kw) => lower.includes(kw))) {
+        summary.skipped.push({
+          headline: item.headline,
+          company: item.company,
+          reason: "no keyword match",
+        });
+        continue;
+      }
+      earningsItems.push(item);
+    }
+
+    summary.earningsMatches = earningsItems.length;
+    console.log(`Found ${earningsItems.length} earnings-related releases\n`);
+
+    for (const item of earningsItems) {
+      const ticker = await lookupTicker(item.company);
+      if (!ticker) {
+        console.log(
+          `Skipping "${item.headline}" — no CPH ticker for "${item.company}"`
+        );
+        summary.failures.push({ company: item.company, reason: "no CPH ticker" });
+        continue;
+      }
+
+      const reportPeriod = guessReportPeriod(item.headline);
+      console.log(`\n── ${item.company} (${ticker}) — ${reportPeriod} ──`);
+
+      try {
+        const out = await processAnalysis({
+          ticker,
+          companyName: item.company,
+          releaseUrl: item.messageUrl,
+          reportPeriod,
+        });
+        summary.successes.push({
+          ticker: out.ticker,
+          company: out.companyName,
+          reportPeriod,
+          pngPath: out.pngPath,
+        });
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : String(err);
+        console.error(`Failed for ${item.company}: ${reason}`);
+        summary.failures.push({ company: item.company, ticker, reason });
+      }
+    }
+
+    console.log("\n========== SUMMARY ==========");
+    console.log(`Earnings releases scanned: ${earningsItems.length}`);
+    console.log(`Successful: ${summary.successes.length}`);
+    summary.successes.forEach((s) => console.log(`  ✓ ${s.ticker} → ${s.pngPath}`));
+    console.log(`Failed: ${summary.failures.length}`);
+    summary.failures.forEach((f) => console.log(`  ✗ ${f.company}: ${f.reason}`));
+  } catch (err) {
+    summary.status = "FAILED";
+    summary.error = err instanceof Error ? (err.stack ?? err.message) : String(err);
+    throw err;
+  } finally {
+    summary.finishedAt = new Date().toISOString();
     try {
-      const out = await processAnalysis({
-        ticker,
-        companyName: item.company,
-        releaseUrl: item.messageUrl,
-        reportPeriod,
-      });
-      successes.push(`${out.ticker} → ${out.pngPath}`);
-    } catch (err) {
-      const reason = err instanceof Error ? err.message : String(err);
-      console.error(`Failed for ${item.company}: ${reason}`);
-      failures.push({ company: item.company, reason });
+      await writeRunSummary(date, summary);
+    } catch (writeErr) {
+      console.error("Failed to write _run.md:", writeErr);
     }
   }
-
-  console.log("\n========== SUMMARY ==========");
-  console.log(`Earnings releases scanned: ${earningsItems.length}`);
-  console.log(`Successful: ${successes.length}`);
-  successes.forEach((s) => console.log(`  ✓ ${s}`));
-  console.log(`Failed: ${failures.length}`);
-  failures.forEach((f) => console.log(`  ✗ ${f.company}: ${f.reason}`));
 }
 
 main().catch((err) => {
