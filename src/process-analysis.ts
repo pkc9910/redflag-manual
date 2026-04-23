@@ -33,8 +33,6 @@ export interface ProcessOutput {
   status: "completed";
 }
 
-const OUT_DIR = ".tmp";
-
 function safeSlug(s: string): string {
   return s.replace(/[^a-zA-Z0-9]/g, "_");
 }
@@ -134,12 +132,13 @@ export async function processAnalysis(input: ProcessInput): Promise<ProcessOutpu
   const textContent = buildTextContent(analysisData);
 
   // ── Step 8: Persist outputs ────────────────────────────────────────
-  await mkdir(OUT_DIR, { recursive: true });
   const date = new Date().toISOString().slice(0, 10);
+  const outDir = join("output", date);
+  await mkdir(outDir, { recursive: true });
   const slug = safeSlug(input.ticker);
-  const pngPath = join(OUT_DIR, `${slug}_redflag_${date}.png`);
-  const txtPath = join(OUT_DIR, `${slug}_redflag_${date}.txt`);
-  const htmlPath = join(OUT_DIR, `${slug}_redflag_card.html`);
+  const pngPath = join(outDir, `${slug}_redflag_${date}.png`);
+  const txtPath = join(outDir, `${slug}_redflag_${date}.txt`);
+  const htmlPath = join(outDir, `${slug}_redflag_card.html`);
 
   await writeFile(pngPath, pngBuffer);
   await writeFile(txtPath, textContent, "utf8");
