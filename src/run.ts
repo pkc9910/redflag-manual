@@ -23,6 +23,7 @@ import { writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { processAnalysis } from "./process-analysis.js";
 import { getOutputDir } from "./utils/paths.js";
+import { fetchWithRetry } from "./utils/fetch-with-retry.js";
 
 const EARNINGS_KEYWORDS = [
   "årsrapport",
@@ -78,7 +79,7 @@ interface Skipped {
 
 async function lookupTicker(companyName: string): Promise<string | null> {
   const url = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(companyName)}&quotesCount=10&newsCount=0`;
-  const res = await fetch(url, {
+  const res = await fetchWithRetry(url, {
     headers: { "User-Agent": "Mozilla/5.0 (compatible; RedflagAnalysis/1.0)" },
   });
   if (!res.ok) {
@@ -99,17 +100,26 @@ function guessReportPeriod(headline: string): string {
   const yearMatch = headline.match(/20\d{2}/);
   const year = yearMatch ? yearMatch[0] : new Date().getFullYear().toString();
 
+  // Check interim patterns BEFORE annual. "Delårsrapport" contains the
+  // substring "årsrapport", so an annual-first check mis-tags every
+  // Danish interim report as a full-year.
+  const qMatch = lower.match(/q([1-4])\b/) ?? lower.match(/([1-4])\.\s*kvartal/);
+  if (qMatch) return `Q${qMatch[1]} ${year}`;
+  if (lower.includes("halvår") || /\bh1\b/.test(lower)) return `H1 ${year}`;
+  if (
+    lower.includes("delårsrapport") ||
+    lower.includes("delårs") ||
+    lower.includes("kvartalsrapport") ||
+    lower.includes("interim")
+  ) {
+    return `Delårsrapport ${year}`;
+  }
   if (
     lower.includes("årsrapport") ||
     lower.includes("annual report") ||
     lower.includes("year-end")
   ) {
     return `Årsrapport ${year}`;
-  }
-  const qMatch = lower.match(/q([1-4])/);
-  if (qMatch) return `Q${qMatch[1]} ${year}`;
-  if (lower.includes("halvår") || lower.includes("h1") || lower.includes("interim")) {
-    return `H1 ${year}`;
   }
   return `Regnskab ${year}`;
 }
@@ -200,7 +210,7 @@ async function main() {
   try {
     console.log("Scanning Nasdaq Copenhagen for new earnings releases...");
 
-    const response = await fetch(NASDAQ_NEWS_API);
+    const response = await fetchWithRetry(NASDAQ_NEWS_API);
     if (!response.ok) {
       throw new Error(`Nasdaq news API returned ${response.status}`);
     }

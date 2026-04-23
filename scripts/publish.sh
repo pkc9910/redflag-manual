@@ -15,6 +15,11 @@ fi
 # Preflight: typecheck. Cheap; catches type errors before the routine ships them.
 npm run typecheck
 
+# The routine container runs as root, but `claude -p --permission-mode
+# bypassPermissions` refuses to run as root unless IS_SANDBOX=1 is set. The
+# container IS the sandbox, so this is safe here.
+export IS_SANDBOX=1
+
 # Run the pipeline. (Was: `npm run` with no script name — the silent-failure bug.)
 npm run run
 
