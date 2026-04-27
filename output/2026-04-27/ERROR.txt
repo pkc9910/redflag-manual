@@ -1,0 +1,26 @@
+redflag pipeline error — 2026-04-27
+===================================
+
+Step failed: Step 4 — npm run run (tsx src/run.ts)
+
+Full error message:
+  Error: Nasdaq news API returned 403
+      at main (/home/user/redflag-manual/src/run.ts:215:13)
+      at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+
+Context:
+  The Nasdaq Copenhagen news API (api.news.eu.nasdaq.com/news/query.action)
+  returned HTTP 403 Forbidden when the pipeline attempted to fetch the news feed.
+  No news items were fetched and no earnings matches were found.
+  News items fetched: 0
+  Earnings matches:   0
+  Successful tickers: 0
+
+Last stderr output:
+  Scanning Nasdaq Copenhagen for new earnings releases...
+  Wrote /home/user/redflag-manual/output/2026-04-27/_run.md
+  Error: Nasdaq news API returned 403
+      at main (/home/user/redflag-manual/src/run.ts:215:13)
+      at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+
+No partial artifacts were produced (.tmp/ directory was not created).
