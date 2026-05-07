@@ -1,0 +1,22 @@
+Step failed: Step 4 — npm run run (tsx src/run.ts)
+
+Error message:
+  Error: Nasdaq news API returned 403
+
+Full stderr/stdout:
+  > run
+  > tsx src/run.ts
+
+  Scanning Nasdaq Copenhagen for new earnings releases...
+  Wrote /home/user/redflag-manual/output/2026-05-07/_run.md
+  Error: Nasdaq news API returned 403
+      at main (/home/user/redflag-manual/src/run.ts:215:13)
+      at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+
+Exit code: 1
+
+Notes:
+  - The Nasdaq Copenhagen news API (api.news.eu.nasdaq.com) returned HTTP 403 Forbidden.
+  - No .tmp/ artifacts were produced.
+  - _run.md was written by the pipeline before the error occurred.
+  - ALPHA_VANTAGE_API_KEY is unset (expected in this environment).
