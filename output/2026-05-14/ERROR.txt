@@ -1,0 +1,17 @@
+Pipeline run: 2026-05-14
+
+FAILED STEP: Step 4 — npm run run (tsx src/run.ts)
+
+ERROR MESSAGE:
+Error: Nasdaq news API returned 403
+    at main (/home/user/redflag-manual/src/run.ts:215:13)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+
+EXIT CODE: 1
+
+NOTES:
+- The Nasdaq Copenhagen news API (api.news.eu.nasdaq.com) returned HTTP 403 Forbidden.
+- No .tmp/ directory was created; no earnings artifacts were produced.
+- The script wrote output/2026-05-14/_run.md before the failure.
+- ALPHA_VANTAGE_API_KEY was unset (expected; market cap would show as "Ikke tilgængelig").
+- No .env, .tmp/, or node_modules/ files were staged or committed.
