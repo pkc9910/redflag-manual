@@ -1,0 +1,29 @@
+redflag pipeline error — 2026-05-15
+
+Step failed: 4 (npm run run — tsx src/run.ts)
+
+Error message:
+TypeError: fetch failed
+    at node:internal/deps/undici/undici:14976:13
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async fetchWithRetry (/home/user/redflag-manual/src/utils/fetch-with-retry.ts:15:19)
+    at async main (/home/user/redflag-manual/src/run.ts:213:22) {
+  [cause]: ConnectTimeoutError: Connect Timeout Error (attempted addresses: 13.50.184.12:443, timeout: 10000ms)
+      at onConnectTimeout (node:internal/deps/undici/undici:2746:28)
+      at Immediate._onImmediate (node:internal/deps/undici/undici:2727:11)
+      at process.processImmediate (node:internal/timers:484:21) {
+    code: 'UND_ERR_CONNECT_TIMEOUT'
+  }
+}
+
+Root cause:
+The sandbox could not establish a TCP connection to api.news.eu.nasdaq.com:443
+(resolved to 13.50.184.12). The fetch was retried 3 times (1 s, 2 s) and all
+attempts timed out after 10 000 ms each.
+
+This is a network policy issue in the remote execution environment — outbound
+HTTPS to api.news.eu.nasdaq.com is blocked or unreachable from this container.
+No earnings data was fetched; no ticker artifacts were produced.
+
+Partial artifacts written by the script before failure:
+  output/2026-05-15/_run.md  (status: FAILED, 0 matches)
