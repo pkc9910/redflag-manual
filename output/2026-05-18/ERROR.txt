@@ -1,0 +1,23 @@
+Step failed: 4 (npm run run — pipeline execution)
+Date: 2026-05-18
+Command: npm run run (tsx src/run.ts)
+
+Error message:
+Error: Nasdaq news API returned 403
+    at main (/home/user/redflag-manual/src/run.ts:215:13)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+
+Exit code: 1
+
+Last stderr output:
+> run
+> tsx src/run.ts
+
+Scanning Nasdaq Copenhagen for new earnings releases...
+Wrote /home/user/redflag-manual/output/2026-05-18/_run.md
+Error: Nasdaq news API returned 403
+    at main (/home/user/redflag-manual/src/run.ts:215:13)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+
+Note: No .tmp/ artifacts were produced. The API returned HTTP 403 before
+any news items could be fetched or processed.
